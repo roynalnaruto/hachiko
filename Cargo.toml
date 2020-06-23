@@ -1,0 +1,22 @@
+[package]
+name = "hachiko"
+version = "0.1.0"
+authors = ["Rohit Narurkar <rohit.narurkar@protonmail.com>"]
+edition = "2018"
+
+[lib]
+name = "hachiko_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hachiko"
+path = "src/bin/hachiko.rs"
+
+[dependencies]
+async-trait = "0.1.36"
+ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["abigen"] }
+serde_json = "1.0.55"
+url = "2.1"
+
+[dev-dependencies]
+tokio = { version = "0.2.21", default-features = false, features = ["rt-core", "macros"] }
