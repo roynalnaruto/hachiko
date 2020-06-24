@@ -55,10 +55,6 @@ impl SimpleStorageValidator {
 
 #[async_trait]
 impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStorageValidator {
-    fn say_hi(&self) {
-        println!("hello, world!");
-    }
-
     async fn before_state(&self) -> Result<SimpleStorageState, ContractError> {
         let value = self.contract.get_value().call().await?;
         let last_sender = self.contract.last_sender().call().await?;

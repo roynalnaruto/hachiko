@@ -18,13 +18,11 @@ mod test {
         prelude::*,
         utils::{Ganache, Solc},
     };
-    use std::convert::TryFrom;
-    use std::sync::Arc;
-    use std::time::Duration;
+    use std::{convert::TryFrom, sync::Arc, time::Duration};
 
     use crate::{simple_storage_validator::SimpleStorageValidator, ValidatorConfig};
 
-    abigen!(SimpleContract, "./contract-abi/SimpleStorage.json",);
+    abigen!(SimpleContract, "./contract-abi/SimpleStorage.json");
 
     #[tokio::test]
     async fn test_validate_dev() {

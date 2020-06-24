@@ -31,8 +31,6 @@ where
     S: State,
     T: StateTransition,
 {
-    fn say_hi(&self);
-
     async fn before_state(&self) -> Result<S, ContractError>;
 
     async fn state_transition(&self) -> Result<T, ContractError>;
