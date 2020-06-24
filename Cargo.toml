@@ -13,6 +13,8 @@ name = "hachiko"
 path = "src/bin/hachiko.rs"
 
 [dependencies]
+validator_derive = { path = "validator_derive" }
+
 async-trait = "0.1.36"
 ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["abigen"] }
 serde_json = "1.0.55"

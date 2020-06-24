@@ -1,0 +1,12 @@
+[package]
+name = "validator_derive"
+version = "0.1.0"
+authors = ["Rohit Narurkar <rohit.narurkar@protonmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.33", features = ["extra-traits"] }
+quote = "1.0"

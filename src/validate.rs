@@ -1,14 +1,20 @@
+use ethers::contract::ContractError;
+
 use crate::{State, StateTransition, Validator};
 
-pub(crate) async fn validate<S, T, V>(validator: V)
+pub(crate) async fn validate<S, T, V>(validator: V) -> Result<(), ContractError>
 where
     S: State,
     T: StateTransition,
     V: Validator<S, T>,
 {
-    validator.before_state().await;
-    validator.state_transition().await;
-    validator.after_state().await;
+    let initial_state = validator.before_state().await?;
+    let (_state_transition, expected_state) = validator.state_transition(initial_state).await?;
+    let final_state = validator.after_state().await?;
+
+    assert_eq!(final_state, expected_state);
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -70,6 +76,6 @@ mod test {
         let validator = SimpleStorageValidator::new(validator_config);
 
         // 10. validate
-        validate(validator).await;
+        validate(validator).await.unwrap();
     }
 }

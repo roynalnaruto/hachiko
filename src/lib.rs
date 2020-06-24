@@ -4,6 +4,8 @@ use ethers::{
     core::types::{Address, PrivateKey, TransactionReceipt},
 };
 
+pub use validator_derive::ValidatorBase;
+
 mod simple_storage;
 
 mod simple_storage_validator;
@@ -33,7 +35,11 @@ where
 {
     async fn before_state(&self) -> Result<S, ContractError>;
 
-    async fn state_transition(&self) -> Result<T, ContractError>;
+    async fn state_transition(&self, state: S) -> Result<(T, S), ContractError>;
 
     async fn after_state(&self) -> Result<S, ContractError>;
+}
+
+pub trait ValidatorBase {
+    fn init() -> String;
 }

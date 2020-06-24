@@ -8,7 +8,10 @@ use ethers::{
 
 use std::{convert::TryFrom, sync::Arc};
 
-use crate::{simple_storage::SimpleStorage, State, StateTransition, Validator, ValidatorConfig};
+use crate::{
+    simple_storage::SimpleStorage, State, StateTransition, Validator, ValidatorBase,
+    ValidatorConfig,
+};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
@@ -35,6 +38,7 @@ impl StateTransition for SimpleStorageStateTransition {
     }
 }
 
+#[derive(ValidatorBase)]
 pub struct SimpleStorageValidator {
     contract: SimpleStorage<Http, Wallet>,
 }
@@ -62,11 +66,20 @@ impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStora
         Ok(SimpleStorageState { value, last_sender })
     }
 
-    async fn state_transition(&self) -> Result<SimpleStorageStateTransition, ContractError> {
+    async fn state_transition(
+        &self,
+        _state: SimpleStorageState,
+    ) -> Result<(SimpleStorageStateTransition, SimpleStorageState), ContractError> {
         let tx_hash = self.contract.set_value("hi".to_owned()).send().await?;
         let tx_receipt = self.contract.pending_transaction(tx_hash).await?;
 
-        Ok(SimpleStorageStateTransition { tx_receipt })
+        Ok((
+            SimpleStorageStateTransition { tx_receipt },
+            SimpleStorageState {
+                value: "hi".to_string(),
+                last_sender: self.contract.client().address(),
+            },
+        ))
     }
 
     async fn after_state(&self) -> Result<SimpleStorageState, ContractError> {
@@ -74,5 +87,18 @@ impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStora
         let last_sender = self.contract.last_sender().call().await?;
 
         Ok(SimpleStorageState { value, last_sender })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_init() {
+        assert_eq!(
+            SimpleStorageValidator::init(),
+            "Hello! I am SimpleStorageValidator!",
+        );
     }
 }
