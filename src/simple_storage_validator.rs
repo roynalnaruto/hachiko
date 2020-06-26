@@ -1,16 +1,18 @@
 use async_trait::async_trait;
+use config::{Config, File};
 use ethers::{
     contract::ContractError,
-    core::types::{Address, TransactionReceipt, U64},
+    core::types::{Address, PrivateKey, TransactionReceipt, U64},
     providers::{Http, Provider},
     signers::Wallet,
 };
+use serde::Deserialize;
 use validator_derive::{add_base_state, add_base_state_transition, ValidatorBase};
 
-use std::{convert::TryFrom, sync::Arc};
+use std::{convert::TryFrom, str::FromStr, sync::Arc, time::Duration};
 
 use crate::{
-    simple_storage::SimpleStorage, State, StateTransition, Validator, ValidatorBase,
+    simple_storage::SimpleStorage, Configurable, State, StateTransition, Validator, ValidatorBase,
     ValidatorConfig,
 };
 
@@ -37,23 +39,9 @@ impl StateTransition for SimpleStorageStateTransition {
     }
 }
 
-#[derive(ValidatorBase)]
+#[derive(ValidatorBase, Debug)]
 pub struct SimpleStorageValidator {
     contract: SimpleStorage<Http, Wallet>,
-}
-
-#[allow(dead_code)]
-impl SimpleStorageValidator {
-    pub fn new(config: ValidatorConfig) -> Self {
-        let wallet: Wallet = config.private_key.clone().into();
-        let provider = Provider::<Http>::try_from(config.url).expect("this should not fail");
-        let client = wallet.connect(provider);
-        let client = Arc::new(client);
-        let contract: SimpleStorage<Http, Wallet> =
-            SimpleStorage::new(config.address, client.clone());
-
-        SimpleStorageValidator { contract }
-    }
 }
 
 #[async_trait]
@@ -109,9 +97,6 @@ mod test {
 
     #[test]
     fn test_init() {
-        assert_eq!(
-            SimpleStorageValidator::init(),
-            "Hello! I am SimpleStorageValidator!",
-        );
+        let _validator = SimpleStorageValidator::init();
     }
 }

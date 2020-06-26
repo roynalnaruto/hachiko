@@ -1,10 +1,14 @@
 extern crate proc_macro;
 
+use inflector::cases::snakecase::to_snake_case;
 use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span};
 use quote::{quote, ToTokens};
 use syn::{
-    parse, parse_macro_input, punctuated::Punctuated, token::Comma, Field, Fields, FieldsNamed,
-    ItemStruct,
+    Field, Fields, FieldsNamed, ItemStruct,
+    parse, parse_macro_input,
+    punctuated::Punctuated,
+    token::Comma,
 };
 
 #[proc_macro_derive(ValidatorBase)]
@@ -15,10 +19,58 @@ pub fn validator_base_derive(input: TokenStream) -> TokenStream {
 
 fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
+    let config_name = format!("{}Config", name);
+    let config_filename = to_snake_case(&name.to_string());
+    let config_path = format!("config/default/{}", config_filename);
+    let config_ident = Ident::new(config_name.as_str(), Span::call_site());
+
     let gen = quote! {
+        #[derive(Debug, Deserialize)]
+        pub struct #config_ident {
+            private_key: String,
+            address: String,
+            url: String,
+        }
+
+        impl Configurable for #config_ident {
+            fn fetch_config() -> ValidatorConfig {
+                let mut s = Config::new();
+                s.merge(File::with_name(#config_path)).expect("[load config] should not fail");
+                let c: #config_ident = s.try_into().expect("[parse config] should not fail");
+                let pk = PrivateKey::from_str(c.private_key.as_str()).expect("[parse pk] should not fail");
+                let wallet: Wallet = pk.into();
+                let addr = Address::from_str(c.address.as_str()).expect("[parse addr] should not fail");
+
+                ValidatorConfig::new(&wallet, &addr, c.url.as_str())
+            }
+        }
+
         impl ValidatorBase for #name {
-            fn init() -> String {
-                format!("Hello! I am {}!", stringify!(#name))
+            fn init() -> Self {
+                let config = #config_ident::fetch_config();
+                let provider = Provider::<Http>::try_from(config.url)
+                    .expect("should not fail")
+                    .interval(Duration::from_millis(10u64));
+                let client = config.wallet.connect(provider);
+                let client = Arc::new(client);
+                let address = config.address.clone();
+                let contract: SimpleStorage<Http, Wallet> =
+                    SimpleStorage::new(address, client.clone());
+
+                SimpleStorageValidator { contract }
+            }
+
+            fn init_with(config: ValidatorConfig) -> Self {
+                let provider = Provider::<Http>::try_from(config.url)
+                    .expect("should not fail")
+                    .interval(Duration::from_millis(10u64));
+                let client = config.wallet.connect(provider);
+                let client = Arc::new(client);
+                let address = config.address.clone();
+                let contract: SimpleStorage<Http, Wallet> =
+                    SimpleStorage::new(address, client.clone());
+
+                SimpleStorageValidator { contract }
             }
         }
     };

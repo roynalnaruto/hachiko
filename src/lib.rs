@@ -1,20 +1,38 @@
+extern crate config;
+extern crate serde;
+
 use async_trait::async_trait;
 use ethers::{
     contract::ContractError,
-    core::types::{Address, PrivateKey, TransactionReceipt},
+    core::types::{Address, TransactionReceipt},
+    signers::Wallet,
 };
 
 mod simple_storage;
 
 mod simple_storage_validator;
-pub use simple_storage_validator::SimpleStorageValidator;
 
 mod validate;
 
+#[derive(Debug)]
 pub struct ValidatorConfig {
-    pub private_key: PrivateKey,
+    pub wallet: Wallet,
     pub address: Address,
     pub url: String,
+}
+
+impl ValidatorConfig {
+    fn new(wallet: &Wallet, addr: &Address, url: &str) -> Self {
+        ValidatorConfig {
+            wallet: wallet.clone(),
+            address: addr.clone(),
+            url: url.to_string(),
+        }
+    }
+}
+
+pub trait Configurable {
+    fn fetch_config() -> ValidatorConfig;
 }
 
 pub trait State: Clone + std::fmt::Debug + PartialEq + Sized {
@@ -39,5 +57,7 @@ where
 }
 
 pub trait ValidatorBase {
-    fn init() -> String;
+    fn init() -> Self;
+
+    fn init_with(config: ValidatorConfig) -> Self;
 }
