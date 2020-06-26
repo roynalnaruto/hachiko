@@ -4,8 +4,6 @@ use ethers::{
     core::types::{Address, PrivateKey, TransactionReceipt},
 };
 
-pub use validator_derive::ValidatorBase;
-
 mod simple_storage;
 
 mod simple_storage_validator;

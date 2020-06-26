@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use ethers::{
     contract::ContractError,
-    core::types::{Address, TransactionReceipt},
+    core::types::{Address, TransactionReceipt, U64},
     providers::{Http, Provider},
     signers::Wallet,
 };
+use validator_derive::{add_base_state, add_base_state_transition, ValidatorBase};
 
 use std::{convert::TryFrom, sync::Arc};
 
@@ -13,7 +14,7 @@ use crate::{
     ValidatorConfig,
 };
 
-#[allow(dead_code)]
+#[add_base_state]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SimpleStorageState {
     value: String,
@@ -26,11 +27,9 @@ impl State for SimpleStorageState {
     }
 }
 
-#[allow(dead_code)]
+#[add_base_state_transition]
 #[derive(Clone, Debug, PartialEq)]
-pub struct SimpleStorageStateTransition {
-    tx_receipt: TransactionReceipt,
-}
+pub struct SimpleStorageStateTransition {}
 
 impl StateTransition for SimpleStorageStateTransition {
     fn get_receipt(&self) -> TransactionReceipt {
@@ -62,8 +61,13 @@ impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStora
     async fn before_state(&self) -> Result<SimpleStorageState, ContractError> {
         let value = self.contract.get_value().call().await?;
         let last_sender = self.contract.last_sender().call().await?;
+        let last_block = self.contract.client().get_block_number().await?;
 
-        Ok(SimpleStorageState { value, last_sender })
+        Ok(SimpleStorageState {
+            value,
+            last_sender,
+            last_block,
+        })
     }
 
     async fn state_transition(
@@ -78,6 +82,9 @@ impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStora
             SimpleStorageState {
                 value: "hi".to_string(),
                 last_sender: self.contract.client().address(),
+                // TODO: remove by adding builder and making
+                // last_block as Option<last_block>
+                last_block: U64::default(),
             },
         ))
     }
@@ -86,7 +93,13 @@ impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStora
         let value = self.contract.get_value().call().await?;
         let last_sender = self.contract.last_sender().call().await?;
 
-        Ok(SimpleStorageState { value, last_sender })
+        Ok(SimpleStorageState {
+            value: value,
+            last_sender: last_sender,
+            // TODO: remove by adding builder and making
+            // last_block as Option<last_block>
+            last_block: U64::default(),
+        })
     }
 }
 
