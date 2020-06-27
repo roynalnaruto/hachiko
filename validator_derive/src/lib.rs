@@ -2,6 +2,7 @@ extern crate proc_macro;
 
 use inflector::cases::snakecase::to_snake_case;
 use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span};
 use quote::{quote, ToTokens};
 use syn::{
     Field, Fields, FieldsNamed, ItemStruct,
@@ -9,6 +10,46 @@ use syn::{
     punctuated::Punctuated,
     token::Comma,
 };
+
+#[proc_macro_derive(BaseState)]
+pub fn base_state_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    impl_base_state(&ast)
+}
+
+fn impl_base_state(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
+
+    let gen = quote! {
+        impl State for #name {
+            fn get_state(&self) -> Self {
+                self.clone()
+            }
+        }
+    };
+
+    gen.into()
+}
+
+#[proc_macro_derive(BaseStateTransition)]
+pub fn base_state_transition_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    impl_base_state_transition(&ast)
+}
+
+fn impl_base_state_transition(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
+
+    let gen = quote! {
+        impl StateTransition for #name {
+            fn get_receipt(&self) -> TransactionReceipt {
+                self.tx_receipt.clone()
+            }
+        }
+    };
+
+    gen.into()
+}
 
 #[proc_macro_derive(Configurable)]
 pub fn configurable_derive(input: TokenStream) -> TokenStream {
@@ -47,6 +88,10 @@ pub fn validator_base_derive(input: TokenStream) -> TokenStream {
 
 fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
+    let state_ident = name.to_string().replace("Validator", "State");
+    let state_ident = Ident::new(state_ident.as_str(), Span::call_site());
+    let state_transition_ident = name.to_string().replace("Validator", "StateTransition");
+    let state_transition_ident = Ident::new(state_transition_ident.as_str(), Span::call_site());
 
     let gen = quote! {
         impl ValidatorBase for #name {
@@ -60,7 +105,11 @@ fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
                 let contract: SimpleStorage<Http, Wallet> =
                     SimpleStorage::new(config.address, client.clone());
 
-                SimpleStorageValidator { contract }
+                SimpleStorageValidator {
+                    contract: contract,
+                    state: #state_ident::default(),
+                    state_transition: #state_transition_ident::default(),
+                }
             }
 
             fn init_with(config: ValidatorConfig) -> Self {
@@ -72,7 +121,11 @@ fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
                 let contract: SimpleStorage<Http, Wallet> =
                     SimpleStorage::new(config.address.clone(), client.clone());
 
-                SimpleStorageValidator { contract }
+                SimpleStorageValidator {
+                    contract: contract,
+                    state: #state_ident::default(),
+                    state_transition: #state_transition_ident::default(),
+                }
             }
         }
     };
@@ -83,7 +136,8 @@ fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
 #[proc_macro_attribute]
 pub fn add_base_state(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut item = parse_macro_input!(item as ItemStruct);
-    let field_b: FieldsNamed = syn::parse_str("{ last_block: U64 }").expect("should not fail");
+    let field_b: FieldsNamed = syn::parse_str("{ #[builder(default = \"None\")]last_block: Option<U64> }")
+        .expect("should not fail");
     let field_b: Punctuated<Field, Comma> = field_b.named;
     let field_b_tokens = field_b.to_token_stream();
 

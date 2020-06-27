@@ -17,6 +17,7 @@ validator_derive = { path = "validator_derive" }
 
 async-trait = "0.1.36"
 config = "0.10.1"
+derive_builder = "0.9.0"
 ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["abigen"] }
 serde = "1.0.114"
 serde_json = "1.0.55"

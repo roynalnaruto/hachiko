@@ -1,6 +1,9 @@
 extern crate config;
 extern crate serde;
 
+#[macro_use]
+extern crate derive_builder;
+
 use async_trait::async_trait;
 use ethers::{
     contract::ContractError,
@@ -57,11 +60,15 @@ where
     S: State,
     T: StateTransition,
 {
-    async fn before_state(&self) -> Result<S, ContractError>;
+    fn get_state(&self) -> S;
 
-    async fn state_transition(&self, state: S) -> Result<(T, S), ContractError>;
+    fn get_state_transition(&self) -> T;
 
-    async fn after_state(&self) -> Result<S, ContractError>;
+    async fn fetch_state(&self) -> Result<S, ContractError>;
+
+    async fn sync_state(&mut self) -> Result<S, ContractError>;
+
+    async fn state_transition(&mut self, initial_state: S) -> Result<S, ContractError>;
 }
 
 pub trait ValidatorBase {

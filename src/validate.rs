@@ -3,20 +3,23 @@ use ethers::contract::ContractError;
 use crate::{State, StateTransition, Validator};
 
 #[allow(dead_code)]
-pub async fn validate<S, T, V>(validator: V) -> Result<(), ContractError>
+pub async fn validate<S, T, V>(validator: &mut V) -> Result<(), ContractError>
 where
     S: State,
     T: StateTransition,
     V: Validator<S, T>,
 {
-    let initial_state = validator.before_state().await?;
-    println!("initial state = {:?}", initial_state);
-    let (state_transition, expected_state) = validator.state_transition(initial_state).await?;
-    println!("state transition = {:?}", state_transition);
-    let final_state = validator.after_state().await?;
-    println!("final state = {:?}", final_state);
+    // 1. Sync the Validator's state
+    let initial_state = validator.sync_state().await?;
 
-    assert_eq!(final_state, expected_state);
+    // 2. Transition the Validator's state with a transaction
+    let expected_state = validator.state_transition(initial_state).await?;
+
+    // 3. Sync the Validator's state
+    validator.sync_state().await?;
+
+    // 3. Validator's most recent state should equal the expected state from transition
+    assert_eq!(validator.get_state(), expected_state);
 
     Ok(())
 }
@@ -77,17 +80,17 @@ mod test {
         };
 
         // 9. create new validator
-        let validator = SimpleStorageValidator::init_with(validator_config);
+        let mut validator = SimpleStorageValidator::init_with(validator_config);
 
         // 10. validate
-        validate(validator).await.unwrap();
+        validate(&mut validator).await.unwrap();
     }
 
     #[tokio::test]
     #[ignore = "test only with running ganache with a deployed instance of SimpleStorage"]
     async fn test_validate_dev() {
-        let validator = SimpleStorageValidator::init();
+        let mut validator = SimpleStorageValidator::init();
 
-        validate(validator).await.unwrap();
+        validate(&mut validator).await.unwrap();
     }
 }

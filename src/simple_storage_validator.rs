@@ -6,7 +6,10 @@ use ethers::{
     providers::{Http, Provider},
     signers::Wallet,
 };
-use validator_derive::{add_base_state, add_base_state_transition, Configurable, ValidatorBase};
+use validator_derive::{
+    add_base_state, add_base_state_transition, BaseState, BaseStateTransition, Configurable,
+    ValidatorBase,
+};
 
 use std::{convert::TryFrom, str::FromStr, sync::Arc, time::Duration};
 
@@ -16,77 +19,94 @@ use crate::{
 };
 
 #[add_base_state]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(BaseState, Clone, Debug, Default, Builder)]
 pub struct SimpleStorageState {
     value: String,
     last_sender: Address,
 }
 
-impl State for SimpleStorageState {
-    fn get_state(&self) -> Self {
-        self.clone()
+// TODO: move to BaseState
+impl PartialEq for SimpleStorageState {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value && self.last_sender == other.last_sender
     }
 }
 
 #[add_base_state_transition]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(BaseStateTransition, Clone, Debug, Default, Builder, PartialEq)]
 pub struct SimpleStorageStateTransition {}
-
-impl StateTransition for SimpleStorageStateTransition {
-    fn get_receipt(&self) -> TransactionReceipt {
-        self.tx_receipt.clone()
-    }
-}
 
 #[derive(Configurable, ValidatorBase, Debug)]
 pub struct SimpleStorageValidator {
     contract: SimpleStorage<Http, Wallet>,
+    state: SimpleStorageState,
+    state_transition: SimpleStorageStateTransition,
 }
 
 #[async_trait]
 impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStorageValidator {
-    async fn before_state(&self) -> Result<SimpleStorageState, ContractError> {
+    fn get_state(&self) -> SimpleStorageState {
+        self.state.clone()
+    }
+
+    fn get_state_transition(&self) -> SimpleStorageStateTransition {
+        self.state_transition.clone()
+    }
+
+    async fn fetch_state(&self) -> Result<SimpleStorageState, ContractError> {
+        // 1. Fetch the most recent state from the blockchain
         let value = self.contract.get_value().call().await?;
         let last_sender = self.contract.last_sender().call().await?;
         let last_block = self.contract.client().get_block_number().await?;
 
-        Ok(SimpleStorageState {
-            value,
-            last_sender,
-            last_block,
-        })
+        // 2. Build the state with the above values
+        let state = SimpleStorageStateBuilder::default()
+            .value(value)
+            .last_sender(last_sender)
+            .last_block(Some(last_block))
+            .build()
+            .unwrap();
+
+        Ok(state)
+    }
+
+    async fn sync_state(&mut self) -> Result<SimpleStorageState, ContractError> {
+        // 1. Get the Validator's most recent state
+        let state = self.fetch_state().await?;
+
+        // 2. Update the Validator's state
+        self.state = state.clone();
+
+        Ok(state)
     }
 
     async fn state_transition(
-        &self,
-        _state: SimpleStorageState,
-    ) -> Result<(SimpleStorageStateTransition, SimpleStorageState), ContractError> {
+        &mut self,
+        _initial_state: SimpleStorageState,
+    ) -> Result<SimpleStorageState, ContractError> {
+        // 1. Broadcast a transaction to execute state transition
         let tx_hash = self.contract.set_value("hi".to_owned()).send().await?;
+
+        // 2. Get receipt for the transaction
         let tx_receipt = self.contract.pending_transaction(tx_hash).await?;
 
-        Ok((
-            SimpleStorageStateTransition { tx_receipt },
-            SimpleStorageState {
-                value: "hi".to_string(),
-                last_sender: self.contract.client().address(),
-                // TODO: remove by adding builder and making
-                // last_block as Option<last_block>
-                last_block: U64::default(),
-            },
-        ))
-    }
+        // 3. Build the state transition struct
+        let state_transition = SimpleStorageStateTransitionBuilder::default()
+            .tx_receipt(tx_receipt)
+            .build()
+            .unwrap();
 
-    async fn after_state(&self) -> Result<SimpleStorageState, ContractError> {
-        let value = self.contract.get_value().call().await?;
-        let last_sender = self.contract.last_sender().call().await?;
+        // 4. Update the Validator with the most recent state transition
+        self.state_transition = state_transition;
 
-        Ok(SimpleStorageState {
-            value: value,
-            last_sender: last_sender,
-            // TODO: remove by adding builder and making
-            // last_block as Option<last_block>
-            last_block: U64::default(),
-        })
+        // 5. Build the expected state based on inputs to the state transition
+        let expected_state = SimpleStorageStateBuilder::default()
+            .value("hi".to_string())
+            .last_sender(self.contract.client().address())
+            .build()
+            .unwrap();
+
+        Ok(expected_state)
     }
 }
 
