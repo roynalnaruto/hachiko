@@ -35,7 +35,7 @@ mod test {
     abigen!(SimpleContract, "./contract-abi/SimpleStorage.json");
 
     #[tokio::test]
-    async fn test_validate_dev() {
+    async fn test_validate_deploy() {
         let compiled = Solc::new("./contract-src/SimpleStorage.sol")
             .build()
             .unwrap();
@@ -80,6 +80,14 @@ mod test {
         let validator = SimpleStorageValidator::init_with(validator_config);
 
         // 10. validate
+        validate(validator).await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "test only with running ganache with a deployed instance of SimpleStorage"]
+    async fn test_validate_dev() {
+        let validator = SimpleStorageValidator::init();
+
         validate(validator).await.unwrap();
     }
 }

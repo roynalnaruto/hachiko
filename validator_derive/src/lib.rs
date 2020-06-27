@@ -2,7 +2,6 @@ extern crate proc_macro;
 
 use inflector::cases::snakecase::to_snake_case;
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, Span};
 use quote::{quote, ToTokens};
 use syn::{
     Field, Fields, FieldsNamed, ItemStruct,
@@ -10,6 +9,35 @@ use syn::{
     punctuated::Punctuated,
     token::Comma,
 };
+
+#[proc_macro_derive(Configurable)]
+pub fn configurable_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    impl_fetch_config(&ast)
+}
+
+fn impl_fetch_config(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
+    let config_filename = to_snake_case(&name.to_string());
+    let config_path = format!("config/default/{}", config_filename);
+
+    let gen = quote! {
+        impl Configurable for #name {
+            fn fetch_config() -> ValidatorConfig {
+                let mut s = Config::new();
+                s.merge(File::with_name(#config_path)).expect("[load config] should not fail");
+                let c: FetchConfig = s.try_into().expect("[parse config] should not fail");
+                let pk = PrivateKey::from_str(c.private_key.as_str()).expect("[parse pk] should not fail");
+                let wallet: Wallet = pk.into();
+                let addr = Address::from_str(c.address.as_str()).expect("[parse addr] should not fail");
+
+                ValidatorConfig::new(&wallet, &addr, c.url.as_str())
+            }
+        }
+    };
+
+    gen.into()
+}
 
 #[proc_macro_derive(ValidatorBase)]
 pub fn validator_base_derive(input: TokenStream) -> TokenStream {
@@ -19,43 +47,18 @@ pub fn validator_base_derive(input: TokenStream) -> TokenStream {
 
 fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
-    let config_name = format!("{}Config", name);
-    let config_filename = to_snake_case(&name.to_string());
-    let config_path = format!("config/default/{}", config_filename);
-    let config_ident = Ident::new(config_name.as_str(), Span::call_site());
 
     let gen = quote! {
-        #[derive(Debug, Deserialize)]
-        pub struct #config_ident {
-            private_key: String,
-            address: String,
-            url: String,
-        }
-
-        impl Configurable for #config_ident {
-            fn fetch_config() -> ValidatorConfig {
-                let mut s = Config::new();
-                s.merge(File::with_name(#config_path)).expect("[load config] should not fail");
-                let c: #config_ident = s.try_into().expect("[parse config] should not fail");
-                let pk = PrivateKey::from_str(c.private_key.as_str()).expect("[parse pk] should not fail");
-                let wallet: Wallet = pk.into();
-                let addr = Address::from_str(c.address.as_str()).expect("[parse addr] should not fail");
-
-                ValidatorConfig::new(&wallet, &addr, c.url.as_str())
-            }
-        }
-
         impl ValidatorBase for #name {
             fn init() -> Self {
-                let config = #config_ident::fetch_config();
+                let config = Self::fetch_config();
                 let provider = Provider::<Http>::try_from(config.url)
                     .expect("should not fail")
                     .interval(Duration::from_millis(10u64));
                 let client = config.wallet.connect(provider);
                 let client = Arc::new(client);
-                let address = config.address.clone();
                 let contract: SimpleStorage<Http, Wallet> =
-                    SimpleStorage::new(address, client.clone());
+                    SimpleStorage::new(config.address, client.clone());
 
                 SimpleStorageValidator { contract }
             }
@@ -66,14 +69,14 @@ fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
                     .interval(Duration::from_millis(10u64));
                 let client = config.wallet.connect(provider);
                 let client = Arc::new(client);
-                let address = config.address.clone();
                 let contract: SimpleStorage<Http, Wallet> =
-                    SimpleStorage::new(address, client.clone());
+                    SimpleStorage::new(config.address.clone(), client.clone());
 
                 SimpleStorageValidator { contract }
             }
         }
     };
+
     gen.into()
 }
 

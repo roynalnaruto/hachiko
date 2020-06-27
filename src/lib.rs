@@ -7,12 +7,20 @@ use ethers::{
     core::types::{Address, TransactionReceipt},
     signers::Wallet,
 };
+use serde::Deserialize;
 
 mod simple_storage;
 
 mod simple_storage_validator;
 
 mod validate;
+
+#[derive(Debug, Deserialize)]
+pub struct FetchConfig {
+    private_key: String,
+    address: String,
+    url: String,
+}
 
 #[derive(Debug)]
 pub struct ValidatorConfig {

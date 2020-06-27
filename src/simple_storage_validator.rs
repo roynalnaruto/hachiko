@@ -6,14 +6,13 @@ use ethers::{
     providers::{Http, Provider},
     signers::Wallet,
 };
-use serde::Deserialize;
-use validator_derive::{add_base_state, add_base_state_transition, ValidatorBase};
+use validator_derive::{add_base_state, add_base_state_transition, Configurable, ValidatorBase};
 
 use std::{convert::TryFrom, str::FromStr, sync::Arc, time::Duration};
 
 use crate::{
-    simple_storage::SimpleStorage, Configurable, State, StateTransition, Validator, ValidatorBase,
-    ValidatorConfig,
+    simple_storage::SimpleStorage, Configurable, FetchConfig, State, StateTransition, Validator,
+    ValidatorBase, ValidatorConfig,
 };
 
 #[add_base_state]
@@ -39,7 +38,7 @@ impl StateTransition for SimpleStorageStateTransition {
     }
 }
 
-#[derive(ValidatorBase, Debug)]
+#[derive(Configurable, ValidatorBase, Debug)]
 pub struct SimpleStorageValidator {
     contract: SimpleStorage<Http, Wallet>,
 }
