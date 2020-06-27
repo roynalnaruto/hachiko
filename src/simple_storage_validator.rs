@@ -25,13 +25,6 @@ pub struct SimpleStorageState {
     last_sender: Address,
 }
 
-// TODO: move to BaseState
-impl PartialEq for SimpleStorageState {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value && self.last_sender == other.last_sender
-    }
-}
-
 #[add_base_state_transition]
 #[derive(BaseStateTransition, Clone, Debug, Default, Builder, PartialEq)]
 pub struct SimpleStorageStateTransition {}

@@ -5,6 +5,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{quote, ToTokens};
 use syn::{
+    Data, DataStruct,
     Field, Fields, FieldsNamed, ItemStruct,
     parse, parse_macro_input,
     punctuated::Punctuated,
@@ -20,10 +21,32 @@ pub fn base_state_derive(input: TokenStream) -> TokenStream {
 fn impl_base_state(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
 
+    let block_ident = Some(Ident::new("last_block", Span::call_site()));
+    let fields = match &ast.data {
+        Data::Struct(DataStruct { fields: Fields::Named(fields), .. }) => &fields.named,
+        _ => panic!("expected a struct with named fields"),
+    };
+    let field_name: Vec<&Option<Ident>> = fields.into_iter()
+        .filter(|field| !field.ident.eq(&block_ident))
+        .map(|field| &field.ident)
+        .collect();
+
     let gen = quote! {
         impl State for #name {
             fn get_state(&self) -> Self {
                 self.clone()
+            }
+        }
+
+        impl PartialEq for #name {
+            fn eq(&self, other: &Self) -> bool {
+                #(
+                    if self.#field_name != other.#field_name {
+                        return false;
+                    }
+                )*
+
+                true
             }
         }
     };
