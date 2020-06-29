@@ -5,11 +5,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{quote, ToTokens};
 use syn::{
-    Data, DataStruct,
-    Field, Fields, FieldsNamed, ItemStruct,
-    parse, parse_macro_input,
-    punctuated::Punctuated,
-    token::Comma,
+    parse, parse_macro_input, punctuated::Punctuated, token::Comma, Data, DataStruct, Field,
+    Fields, FieldsNamed, ItemStruct,
 };
 
 #[proc_macro_derive(BaseState)]
@@ -23,10 +20,14 @@ fn impl_base_state(ast: &syn::DeriveInput) -> TokenStream {
 
     let block_ident = Some(Ident::new("last_block", Span::call_site()));
     let fields = match &ast.data {
-        Data::Struct(DataStruct { fields: Fields::Named(fields), .. }) => &fields.named,
+        Data::Struct(DataStruct {
+            fields: Fields::Named(fields),
+            ..
+        }) => &fields.named,
         _ => panic!("expected a struct with named fields"),
     };
-    let field_name: Vec<&Option<Ident>> = fields.into_iter()
+    let field_name: Vec<&Option<Ident>> = fields
+        .into_iter()
         .filter(|field| !field.ident.eq(&block_ident))
         .map(|field| &field.ident)
         .collect();
@@ -35,6 +36,10 @@ fn impl_base_state(ast: &syn::DeriveInput) -> TokenStream {
         impl State for #name {
             fn get_state(&self) -> Self {
                 self.clone()
+            }
+
+            fn get_last_block(&self) -> Option<U64> {
+                self.last_block
             }
         }
 
@@ -159,8 +164,9 @@ fn impl_init(ast: &syn::DeriveInput) -> TokenStream {
 #[proc_macro_attribute]
 pub fn add_base_state(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut item = parse_macro_input!(item as ItemStruct);
-    let field_b: FieldsNamed = syn::parse_str("{ #[builder(default = \"None\")]last_block: Option<U64> }")
-        .expect("should not fail");
+    let field_b: FieldsNamed =
+        syn::parse_str("{ #[builder(default = \"None\")]last_block: Option<U64> }")
+            .expect("should not fail");
     let field_b: Punctuated<Field, Comma> = field_b.named;
     let field_b_tokens = field_b.to_token_stream();
 

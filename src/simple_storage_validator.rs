@@ -14,8 +14,8 @@ use validator_derive::{
 use std::{convert::TryFrom, str::FromStr, sync::Arc, time::Duration};
 
 use crate::{
-    simple_storage::SimpleStorage, Configurable, FetchConfig, State, StateTransition, Validator,
-    ValidatorBase, ValidatorConfig,
+    simple_storage::{SimpleStorage, ValueChangedFilter},
+    Configurable, FetchConfig, State, StateTransition, Validator, ValidatorBase, ValidatorConfig,
 };
 
 #[add_base_state]
@@ -27,7 +27,10 @@ pub struct SimpleStorageState {
 
 #[add_base_state_transition]
 #[derive(BaseStateTransition, Clone, Debug, Default, Builder, PartialEq)]
-pub struct SimpleStorageStateTransition {}
+pub struct SimpleStorageStateTransition {
+    #[builder(default = "None")]
+    last_events: Option<Vec<ValueChangedFilter>>,
+}
 
 #[derive(Configurable, ValidatorBase, Debug)]
 pub struct SimpleStorageValidator {
@@ -37,7 +40,9 @@ pub struct SimpleStorageValidator {
 }
 
 #[async_trait]
-impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStorageValidator {
+impl Validator<SimpleStorageState, SimpleStorageStateTransition, ValueChangedFilter>
+    for SimpleStorageValidator
+{
     fn get_state(&self) -> SimpleStorageState {
         self.state.clone()
     }
@@ -73,15 +78,37 @@ impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStora
         Ok(state)
     }
 
+    async fn sync_events(
+        &mut self,
+        block_number: U64,
+    ) -> Result<Vec<ValueChangedFilter>, ContractError> {
+        // 1. Query event logs for the specified block number
+        let logs = self
+            .contract
+            .value_changed_filter()
+            .from_block(block_number)
+            .to_block(block_number)
+            .query()
+            .await?;
+
+        // 2. Update the Validator's state transition with the latest events
+        if logs.len() > 0 {
+            self.state_transition.last_events = Some(logs.clone());
+        }
+
+        Ok(logs)
+    }
+
     async fn state_transition(
         &mut self,
         _initial_state: SimpleStorageState,
-    ) -> Result<SimpleStorageState, ContractError> {
+    ) -> Result<(SimpleStorageState, Vec<ValueChangedFilter>), ContractError> {
         // 1. Broadcast a transaction to execute state transition
         let tx_hash = self.contract.set_value("hi".to_owned()).send().await?;
 
         // 2. Get receipt for the transaction
         let tx_receipt = self.contract.pending_transaction(tx_hash).await?;
+        let block_number = tx_receipt.block_number;
 
         // 3. Build the state transition struct
         let state_transition = SimpleStorageStateTransitionBuilder::default()
@@ -96,10 +123,18 @@ impl Validator<SimpleStorageState, SimpleStorageStateTransition> for SimpleStora
         let expected_state = SimpleStorageStateBuilder::default()
             .value("hi".to_string())
             .last_sender(self.contract.client().address())
+            .last_block(block_number)
             .build()
             .unwrap();
 
-        Ok(expected_state)
+        let expected_events = vec![ValueChangedFilter {
+            author: self.contract.client().address(),
+            old_author: self.state.last_sender.clone(),
+            old_value: self.state.value.clone(),
+            new_value: "hi".to_string(),
+        }];
+
+        Ok((expected_state, expected_events))
     }
 }
 

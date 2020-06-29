@@ -3,23 +3,33 @@ use ethers::contract::ContractError;
 use crate::{State, StateTransition, Validator};
 
 #[allow(dead_code)]
-pub async fn validate<S, T, V>(validator: &mut V) -> Result<(), ContractError>
+pub async fn validate<S, T, E, V>(validator: &mut V) -> Result<(), ContractError>
 where
     S: State,
     T: StateTransition,
-    V: Validator<S, T>,
+    E: std::fmt::Debug + PartialEq,
+    V: Validator<S, T, E>,
 {
     // 1. Sync the Validator's state
     let initial_state = validator.sync_state().await?;
 
     // 2. Transition the Validator's state with a transaction
-    let expected_state = validator.state_transition(initial_state).await?;
+    let (expected_state, expected_events) = validator.state_transition(initial_state).await?;
 
     // 3. Sync the Validator's state
     validator.sync_state().await?;
 
-    // 3. Validator's most recent state should equal the expected state from transition
+    // 4. If the expected state has a block number, fetch the event logs
+    let events = match expected_state.get_last_block() {
+        None => vec![],
+        Some(block_number) => validator.sync_events(block_number).await?,
+    };
+
+    // 5. Validator's most recent state should equal the expected state from transition
     assert_eq!(validator.get_state(), expected_state);
+
+    // 6. Validator's most recent events should equal the expected events from transition
+    assert_eq!(events, expected_events);
 
     Ok(())
 }
@@ -36,6 +46,17 @@ mod test {
     use crate::{simple_storage_validator::SimpleStorageValidator, ValidatorBase, ValidatorConfig};
 
     abigen!(SimpleContract, "./contract-abi/SimpleStorage.json");
+
+    #[tokio::test]
+    #[ignore = "Include only to generate bindings for a contract"]
+    async fn test_abigen() {
+        Abigen::new("SimpleStorage", "./contract-abi/SimpleStorage.json")
+            .unwrap()
+            .generate()
+            .unwrap()
+            .write_to_file("./simple_storage.rs")
+            .unwrap();
+    }
 
     #[tokio::test]
     async fn test_validate_deploy() {
@@ -87,7 +108,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[ignore = "test only with running ganache with a deployed instance of SimpleStorage"]
+    #[ignore = "Include only when running ganache with a deployed instance of SimpleStorage"]
     async fn test_validate_dev() {
         let mut validator = SimpleStorageValidator::init();
 
