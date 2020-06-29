@@ -25,12 +25,9 @@ pub struct SimpleStorageState {
     last_sender: Address,
 }
 
-#[add_base_state_transition]
+#[add_base_state_transition(ValueChangedFilter)]
 #[derive(BaseStateTransition, Clone, Debug, Default, Builder, PartialEq)]
-pub struct SimpleStorageStateTransition {
-    #[builder(default = "None")]
-    last_events: Option<Vec<ValueChangedFilter>>,
-}
+pub struct SimpleStorageStateTransition {}
 
 #[derive(Configurable, ValidatorBase, Debug)]
 pub struct SimpleStorageValidator {

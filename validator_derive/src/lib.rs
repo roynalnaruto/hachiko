@@ -191,17 +191,24 @@ pub fn add_base_state(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn add_base_state_transition(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn add_base_state_transition(event_type: TokenStream, item: TokenStream) -> TokenStream {
     let mut item = parse_macro_input!(item as ItemStruct);
-    let field_b: FieldsNamed =
-        syn::parse_str("{ tx_receipt: TransactionReceipt }").expect("should not fail");
-    let field_b: Punctuated<Field, Comma> = field_b.named;
-    let field_b_tokens = field_b.to_token_stream();
+    let add_fields = format!(
+        "{{
+        tx_receipt: TransactionReceipt, \
+        #[builder(default = \"None\")] \
+        last_events: Option<Vec<{}>>, \
+    }}",
+        event_type.to_string()
+    );
+    let fields: FieldsNamed = syn::parse_str(&add_fields).expect("should not fail");
+    let fields: Punctuated<Field, Comma> = fields.named;
+    let fields_tokens = fields.to_token_stream();
 
     let new_fields = match item.fields.clone() {
         Fields::Named(named_fields) => {
             let mut tokens = named_fields.named.to_token_stream();
-            tokens.extend(field_b_tokens);
+            tokens.extend(fields_tokens);
             let braced = quote! {{ #tokens }};
             let named_fields =
                 parse::<FieldsNamed>(TokenStream::from(braced)).expect("should not fail");
